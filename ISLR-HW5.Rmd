@@ -1,0 +1,262 @@
+---
+title: "ISLR-HW5"
+author: "Chaoqun Yin"
+date: "2/23/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## 7.3
+```{r}
+x = -2:2
+y = 1 + x + -2 * (x-1)^2 * I(x>1)
+plot(x, y)
+```
+
+For y = x + 1,the curve is between 1 and -2.
+For y = 1 + x - (x-1)^2, it is quadratic between 1 and 2.
+
+
+
+
+
+
+## 7.9
+
+### a)
+```{r}
+library(MASS)
+set.seed(1)
+fit <- lm(nox ~ poly(dis, 3), data = Boston)
+summary(fit)
+```
+
+
+```{r}
+dislims <- range(Boston$dis)
+dis.grid <- seq(from = dislims[1], to = dislims[2], by = 0.1)
+preds <- predict(fit, list(dis = dis.grid))
+plot(nox ~ dis, data = Boston, col = "darkgrey")
+lines(dis.grid, preds, col = "red", lwd = 2)
+```
+
+All coefficients are signicificant. 
+
+
+
+### b)
+```{r}
+rss <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- lm(nox ~ poly(dis, i), data = Boston)
+    rss[i] <- sum(fit$residuals^2)
+}
+plot(1:10, rss, xlab = "Degree", ylab = "RSS", type = "l")
+```
+
+
+It seems that the RSS decreases with the degree of the polynomial, and so is minimum for a polynomial of degree 10.
+
+### c)
+
+```{r}
+library(boot)
+deltas <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- glm(nox ~ poly(dis, i), data = Boston)
+    deltas[i] <- cv.glm(Boston, fit, K = 10)$delta[1]
+}
+plot(1:10, deltas, xlab = "Degree", ylab = "Test MSE", type = "l")
+```
+
+We can see that a polynomial of degree 4 minimizes the test MSE.
+
+### d)
+```{r}
+library(splines)
+fit <- lm(nox ~ bs(dis, knots = c(4, 7, 11)), data = Boston)
+summary(fit)
+```
+
+
+```{r}
+pred <- predict(fit, list(dis = dis.grid))
+plot(nox ~ dis, data = Boston, col = "darkgrey")
+lines(dis.grid, preds, col = "red", lwd = 2)
+```
+
+
+All terms in splines are significant. 
+
+### e)
+```{r}
+rss <- rep(NA, 16)
+for (i in 3:16) {
+    fit <- lm(nox ~ bs(dis, df = i), data = Boston)
+    rss[i] <- sum(fit$residuals^2)
+}
+plot(3:16, rss[-c(1, 2)], xlab = "Degrees of freedom", ylab = "RSS", type = "l")
+```
+
+We can see that RSS decreases until 14 and then slightly increases after that.
+
+
+### f)
+```{r,warning=FALSE}
+cv <- rep(NA, 16)
+for (i in 3:16) {
+    fit <- glm(nox ~ bs(dis, df = i), data = Boston)
+    cv[i] <- cv.glm(Boston, fit, K = 10)$delta[1]
+}
+plot(3:16, cv[-c(1, 2)], xlab = "Degrees of freedom", ylab = "Test MSE", type = "l")
+
+```
+
+Test MSE is minimum when the degrees of freedom are 10.
+
+##7.10
+
+
+```{r,message=FALSE}
+library(leaps)
+set.seed(1)
+library(ISLR)
+attach(College)
+train <- sample(length(Outstate), length(Outstate) / 2)
+test <- -train
+College.train <- College[train, ]
+College.test <- College[test, ]
+fit <- regsubsets(Outstate ~ ., data = College.train, nvmax = 17, method = "forward")
+fit.summary <- summary(fit)
+par(mfrow = c(1, 3))
+plot(fit.summary$cp, xlab = "Number of variables", ylab = "Cp", type = "l")
+min.cp <- min(fit.summary$cp)
+std.cp <- sd(fit.summary$cp)
+abline(h = min.cp + 0.2 * std.cp, col = "red", lty = 2)
+abline(h = min.cp - 0.2 * std.cp, col = "red", lty = 2)
+plot(fit.summary$bic, xlab = "Number of variables", ylab = "BIC", type='l')
+min.bic <- min(fit.summary$bic)
+std.bic <- sd(fit.summary$bic)
+abline(h = min.bic + 0.2 * std.bic, col = "red", lty = 2)
+abline(h = min.bic - 0.2 * std.bic, col = "red", lty = 2)
+plot(fit.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R2", type = "l", ylim = c(0.4, 0.84))
+max.adjr2 <- max(fit.summary$adjr2)
+std.adjr2 <- sd(fit.summary$adjr2)
+abline(h = max.adjr2 + 0.2 * std.adjr2, col = "red", lty = 2)
+abline(h = max.adjr2 - 0.2 * std.adjr2, col = "red", lty = 2)
+```
+
+Cp, BIC and adjr2 show that size 6 is the minimum size for the subset for which the scores are within 0.2 standard devitations of optimum.
+
+
+### b)
+
+```{r,message=FALSE}
+fit <- regsubsets(Outstate ~ ., data = College, method = "forward")
+coeffs <- coef(fit, id = 6)
+#names(coeffs)
+library(gam)
+fit <- gam(Outstate ~ Private + s(Room.Board, df = 2) + s(PhD, df = 2) + s(perc.alumni, df = 2) + s(Expend, df = 5) + s(Grad.Rate, df = 2), data=College.train)
+par(mfrow = c(2, 3))
+plot(fit, se = T, col = "blue")
+```
+
+
+### c)
+```{r}
+preds <- predict(fit, College.test)
+err <- mean((College.test$Outstate - preds)^2)
+err
+```
+
+```{r}
+tss <- mean((College.test$Outstate - mean(College.test$Outstate))^2)
+rss <- 1 - err / tss
+rss
+```
+
+We obtain a test R^2 of 0.77 using GAM with 6 predictors.
+
+
+
+### d)
+```{r}
+summary(fit)
+
+```
+
+ANOVA shows a strong evidence of non-linear relationship between “Outstate” and “Expend”“, and a moderately strong non-linear relationship (using p-value of 0.05) between”Outstate" and “Grad.Rate”" or “PhD”.
+
+
+
+## 7.11
+
+### a,b)
+```{r}
+set.seed(1)
+y <- rnorm(100)
+x1 <- rnorm(100)
+x2 <- rnorm(100)
+beta1 <- 6.66
+```
+
+
+### c)
+```{r}
+a <- y - beta1 * x1
+beta2 <- lm(a ~ x2)$coef[2]
+```
+
+
+### d)
+```{r}
+a <- y - beta2 * x2
+beta1 <- lm(a ~ x1)$coef[2]
+```
+
+### e)
+```{r}
+iter <- 10
+df <- data.frame(0.0, 0.27, 0.0)
+names(df) <- c('beta0', 'beta1', 'beta2')
+for (i in 1:iter) {
+  beta1 <- df[nrow(df), 2]
+  a <- y - beta1 * x1
+  beta2 <- lm(a ~ x2)$coef[2]
+  a <- y - beta2 * x2
+  beta1 <- lm(a ~ x1)$coef[2]
+  beta0 <- lm(a ~ x1)$coef[1]
+  print(beta0)
+  print(beta1)
+  print(beta2)
+  df[nrow(df) + 1,] <- list(beta0, beta1, beta2)
+}
+```
+
+```{r}
+plot(df$beta0, col = 'red', type = 'l')
+lines(df$beta1, col = 'blue')
+lines(df$beta2, col = 'green')
+
+```
+
+
+### f)
+```{r}
+plot(df$beta0, col = 'red', type = 'l')
+lines(df$beta1, col = 'blue')
+
+
+lines(df$beta2, col = 'green')
+res <- coef(lm(y ~ x1 + x2))
+abline(h = res[1], col = 'darkred', lty = 2)
+
+abline(h = res[2], col = 'darkblue', lty = 2)
+abline(h = res[3], col = 'darkgreen', lty = 2)
+```
+
+The coefficients from iterations and multiple regression are exactly the same.
